@@ -1,0 +1,71 @@
+import numpy as np
+import re
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Embedding, Lambda
+import tensorflow as tf
+
+# Input data
+data = """Deep learning (also known as deep structured learning) is part of a broader family of machine learning methods based on artificial neural networks with representation learning. Learning can be supervised, semi-supervised or unsupervised. Deep-learning architectures such as deep neural networks, deep belief networks, deep reinforcement learning, recurrent neural networks, convolutional neural networks and Transformers have been applied to fields including computer vision, speech recognition, natural language processing, machine translation, bioinformatics, drug design, medical image analysis, climate science, material inspection and board game programs, where they have produced results comparable to and in some cases surpassing human expert performance."""
+
+# Preprocessing
+sentences = data.split('.')
+clean_sent = []
+for sentence in sentences:
+    if sentence == "":
+        continue
+    sentence = re.sub('[^A-Za-z0-9]+', ' ', sentence).strip()
+    sentence = re.sub(r'(?:^| )\w (?:$| )', ' ', sentence).lower()
+    clean_sent.append(sentence)
+
+# Tokenizing
+tokenizer = Tokenizer()
+tokenizer.fit_on_texts(clean_sent)
+sequences = tokenizer.texts_to_sequences(clean_sent)
+
+# Create mapping dictionaries
+index_to_word = {}
+word_to_index = {}
+for i, sequence in enumerate(sequences):
+    words = clean_sent[i].split()
+    for j, value in enumerate(sequence):
+        index_to_word[value] = words[j]
+        word_to_index[words[j]] = value
+
+# Context and target word extraction
+vocab_size = len(tokenizer.word_index) + 1
+emb_size = 10
+context_size = 2
+contexts, targets = [], []
+
+for sequence in sequences:
+    for i in range(context_size, len(sequence) - context_size):
+        target = sequence[i]
+        context = [sequence[i - 2], sequence[i - 1], sequence[i + 1], sequence[i + 2]]
+        contexts.append(context)
+        targets.append(target)
+
+# Convert contexts and targets to numpy arrays
+X = np.array(contexts)
+Y = np.array(targets)
+
+# Define the model
+model = Sequential([
+    Embedding(input_dim=vocab_size, output_dim=emb_size),
+    Lambda(lambda x: tf.reduce_mean(x, axis=1)),
+    Dense(256, activation='relu'),
+    Dense(512, activation='relu'),
+    Dense(vocab_size, activation='softmax')
+])
+
+# Compile the model
+model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+
+# Train the model
+history = model.fit(X, Y, epochs=80)
+
+# Display results
+for i in range(5):
+    words = [index_to_word[j] for j in contexts[i]]
+    target = index_to_word[targets[i]]
+    print("Context words:", words, "-> Target word:", target)
